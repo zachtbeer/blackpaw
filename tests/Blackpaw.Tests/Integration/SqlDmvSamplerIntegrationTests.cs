@@ -24,6 +24,15 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         _sqlServer = sqlServer;
     }
 
+    /// <summary>
+    /// Skips the current test if SQL Server container is not available.
+    /// Call this at the start of each test that requires the container.
+    /// </summary>
+    private void SkipIfContainerNotAvailable()
+    {
+        Skip.If(!_sqlServer.IsAvailable, _sqlServer.InitializationError ?? "SQL Server container not available");
+    }
+
     public Task InitializeAsync()
     {
         // Create fresh SQLite database for each test
@@ -55,9 +64,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_CanConnectToSqlServer()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange & Act - verify we can connect directly first
         var result = await SqlServerLoadGenerator.ExecuteSimpleQueryAsync(_sqlServer.ConnectionString);
 
@@ -65,9 +76,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         Assert.Equal(1, result);
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_DmvQueriesExecuteWithoutError()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(_sqlServer.ConnectionString);
         await conn.OpenAsync();
@@ -116,9 +129,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         }
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_ConnectsToSqlServer_CapturesSample()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         using var sampler = new SqlDmvSampler(
             _database!,
@@ -137,9 +152,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         Assert.All(samples, s => Assert.NotEqual(default, s.TimestampUtc));
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_TracksUserConnections_ReflectsActiveConnections()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         using var sampler = new SqlDmvSampler(
             _database!,
@@ -172,9 +189,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         }
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_CapturesIoStatistics_AfterDatabaseActivity()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         using var sampler = new SqlDmvSampler(
             _database!,
@@ -204,9 +223,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         }
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_RespectsSampleInterval_CapturesMultipleSamples()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         const double intervalSeconds = 0.5;
         using var sampler = new SqlDmvSampler(
@@ -233,9 +254,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         }
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_DisposesGracefully_StopsCapturing()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         var sampler = new SqlDmvSampler(
             _database!,
@@ -259,9 +282,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         Assert.Equal(samplesBeforeDispose, samplesAfterDispose);
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_CapturesSessionsRunning_DuringActivity()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         using var sampler = new SqlDmvSampler(
             _database!,
@@ -287,9 +312,11 @@ public class SqlDmvSamplerIntegrationTests : IAsyncLifetime
         await queryTask;
     }
 
-    [DockerRequiredFact]
+    [SkippableFact]
     public async Task SqlDmvSampler_CapturesAllExpectedFields()
     {
+        SkipIfContainerNotAvailable();
+
         // Arrange
         using var sampler = new SqlDmvSampler(
             _database!,
