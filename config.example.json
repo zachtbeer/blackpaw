@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "SECURITY WARNING: This file may contain sensitive connection strings. DO NOT commit config.json to version control!",
+  "_usage": "Copy this file to 'config.json' and customize for your environment",
+
+  "DatabasePath": "blackpaw.db",
+  "SampleIntervalSeconds": 1.0,
+  "ProcessNames": [
+    "myapp",
+    "dotnet"
+  ],
+
+  "EnableDiskMetrics": true,
+  "EnableNetworkMetrics": true,
+
+  "DeepMonitoring": {
+    "DotNetCoreApps": [
+      {
+        "Name": "MyApplication",
+        "ProcessName": "myapp",
+        "Enabled": true,
+        "HttpMonitoring": {
+          "Enabled": true,
+          "BucketIntervalSeconds": 5
+        }
+      }
+    ],
+
+    "DotNetFrameworkApps": [
+      {
+        "Name": "LegacyApp",
+        "ProcessName": "legacyapp",
+        "Enabled": true
+      }
+    ],
+
+    "SqlDmvSampling": {
+      "Enabled": false,
+      "SampleIntervalSeconds": 5,
+      "_comment_connection": "WARNING: Connection strings may contain credentials. Use Integrated Security when possible.",
+      "SqlConnectionString": "Server=localhost;Database=master;Integrated Security=true;TrustServerCertificate=true;"
+    },
+
+    "EnableDbCounters": false,
+    "_comment_db_connection": "WARNING: Only required if EnableDbCounters is true",
+    "DbConnectionString": "Server=localhost;Database=mydb;Integrated Security=true;TrustServerCertificate=true;"
+  }
+}

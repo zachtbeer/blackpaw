@@ -1,0 +1,81 @@
+name: Development Build
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Ensure version.txt exists
+        run: |
+          if (!(Test-Path version.txt)) {
+            echo "0.1.0" > version.txt
+            echo "::warning::version.txt not found, using default 0.1.0"
+          }
+        shell: pwsh
+
+      - name: Get version and SHA
+        id: version
+        run: |
+          $version = Get-Content version.txt
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "sha=$sha" >> $env:GITHUB_OUTPUT
+          echo "Development build: $version+$sha"
+        shell: pwsh
+
+      - name: Restore dependencies
+        run: dotnet restore src/blackpaw.app/Blackpaw.App.csproj
+        shell: pwsh
+
+      - name: Run tests
+        run: dotnet test tests/Blackpaw.Tests/Blackpaw.Tests.csproj --logger trx
+        shell: pwsh
+
+      - name: Publish self-contained with version
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $sha = "${{ steps.version.outputs.sha }}"
+
+          dotnet publish src/blackpaw.app/Blackpaw.App.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:PublishTrimmed=false `
+            /p:DebugType=None `
+            /p:Version=$version `
+            /p:AssemblyVersion=$version.0 `
+            /p:FileVersion=$version.0 `
+            /p:InformationalVersion="$version+$sha" `
+            -o artifacts
+        shell: pwsh
+
+      - name: Rename artifact
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $sha = "${{ steps.version.outputs.sha }}"
+          $artifactName = "Blackpaw-v$version+$sha-win-x64.exe"
+
+          Move-Item artifacts/blackpaw.exe "artifacts/$artifactName"
+          echo "Development artifact: $artifactName"
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blackpaw-v${{ steps.version.outputs.version }}+${{ steps.version.outputs.sha }}-win-x64
+          path: artifacts/Blackpaw-v${{ steps.version.outputs.version }}+${{ steps.version.outputs.sha }}-win-x64.exe

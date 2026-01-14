@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleWebClient/SampleWebClient.csproj" />
+  </Folder>
+  <Project Path="src/blackpaw.app/Blackpaw.App.csproj" />
+  <Project Path="src/blackpaw.data/Blackpaw.Data.csproj" />
+  <Project Path="tests/Blackpaw.Tests/Blackpaw.Tests.csproj" />
+</Solution>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Package Metadata -->
+    <Product>Blackpaw</Product>
+    <Title>Blackpaw Data Layer</Title>
+    <Description>Entity Framework Core data layer for Blackpaw performance monitoring tool. Provides SQLite-based persistence for performance telemetry, system samples, process metrics, and runtime diagnostics.</Description>
+    <Authors>Blackpaw Contributors</Authors>
+    <Copyright>Copyright (c) Blackpaw Contributors</Copyright>
+    <PackageTags>performance;monitoring;diagnostics;data;sqlite;efcore</PackageTags>
+    <PackageProjectUrl>https://github.com/zachtbeer/blackpaw</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/zachtbeer/blackpaw</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <!-- Default version for local development, overridable via command line -->
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <!-- AssemblyVersion and FileVersion must be numeric only -->
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <!-- InformationalVersion can include pre-release tags -->
+    <InformationalVersion Condition="'$(InformationalVersion)' == ''">$(Version)-dev</InformationalVersion>
+  </PropertyGroup>
+</Project>

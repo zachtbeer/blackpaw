@@ -1,0 +1,71 @@
+Blackpaw - Windows performance monitoring for scenario-based workload testing
+
+Version: {{VERSION}}
+
+USAGE:
+  blackpaw                              Launch interactive mode (recommended for first use)
+  blackpaw <command> [options]          Run a specific command
+
+COMMANDS:
+  start       Begin a performance capture session
+  list-runs   Show all runs in the database
+  info        Display database statistics
+  report      Generate HTML report from captured data
+  compare     Compare two runs and identify performance changes
+  version     Show version information
+
+START OPTIONS:
+  --scenario <name>            Label for this test run (default: timestamp)
+  --notes <text>               Description or notes about the test
+  --config <path>              Configuration file (default: config.json next to exe)
+  --db <path>                  SQLite database file (default: blackpaw.db next to exe)
+  --processes <names|*>        Processes to monitor (comma-separated, or * for auto-detect)
+  --sample-interval <seconds>  How often to collect metrics (default: 1.0)
+
+  Workload metadata (optional, for organizing test runs):
+  --workload-type <type>       Type: manual, scripted, load-test, prod-capture
+  --workload-size <number>     Numeric size estimate (e.g., user count, request rate)
+  --workload-notes <text>      Additional context about the workload
+
+DEEP MONITORING OPTIONS (for start command):
+  --dotnet-core-apps <names|*> .NET Core/5+ apps for EventPipe monitoring
+  --dotnet-fx-apps <names|*>   .NET Framework apps for perf counter monitoring
+  --enable-http                Track HTTP requests for .NET Core apps
+
+REPORT OPTIONS:
+  --db <path>                  Database file to read (default: blackpaw.db next to exe)
+  --run <id>                   Generate report for specific run ID
+  --all                        Generate reports for all runs in database
+  --output <path>              Output file path for single report
+  --output-dir <path>          Output directory for --all mode
+
+COMPARE OPTIONS:
+  --db <path>                  Database file to read (default: blackpaw.db next to exe)
+  --baseline <id>              Run ID to use as baseline ("before")
+  --target <id>                Run ID to compare against baseline ("after")
+  --output <path>              Output file for HTML comparison report
+
+  If --baseline and --target are omitted, interactive mode lets you pick runs.
+
+GLOBAL OPTIONS:
+  --nologo                     Suppress the startup logo banner
+  --help, -h                   Show this help message
+  --version                    Show version information
+
+EXAMPLES:
+  blackpaw start --scenario "baseline" --processes myapp,sqlservr
+  blackpaw start --scenario "load-test" --dotnet-core-apps * --enable-http
+  blackpaw list-runs                              (uses blackpaw.db next to exe)
+  blackpaw report --run 1                         (uses blackpaw.db next to exe)
+  blackpaw report --all --output-dir ./reports
+  blackpaw compare                                (interactive run selection)
+  blackpaw compare --baseline 1 --target 2
+  blackpaw report --db D:\other\data.db --run 1   (use a different database)
+  blackpaw --nologo start --scenario "quiet-mode"
+
+DEFAULT PATHS:
+  By default, blackpaw.db and config.json are stored in the same directory as
+  blackpaw.exe. This makes the tool portable - copy the folder and all your
+  data comes with it.
+
+For detailed documentation, visit: https://github.com/zachtbeer/blackpaw

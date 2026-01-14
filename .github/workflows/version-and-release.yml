@@ -1,0 +1,162 @@
+name: Version and Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  version-and-release:
+    # Skip if commit message contains [skip ci]
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Ensure version.txt exists
+        run: |
+          if (!(Test-Path version.txt)) {
+            echo "0.1.0" > version.txt
+            echo "::warning::version.txt not found, created with default 0.1.0"
+          }
+        shell: pwsh
+
+      - name: Get PR number from merge commit
+        id: pr_number
+        run: |
+          $commitMessage = git log -1 --pretty=%B
+          if ($commitMessage -match "Merge pull request #(\d+)") {
+            $prNumber = $matches[1]
+            echo "pr_number=$prNumber" >> $env:GITHUB_OUTPUT
+            echo "is_pr_merge=true" >> $env:GITHUB_OUTPUT
+            echo "Detected PR merge: #$prNumber"
+          } else {
+            echo "is_pr_merge=false" >> $env:GITHUB_OUTPUT
+            echo "Not a PR merge, treating as direct push"
+          }
+        shell: pwsh
+
+      - name: Get PR labels
+        id: pr_labels
+        if: steps.pr_number.outputs.is_pr_merge == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const pr = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{ steps.pr_number.outputs.pr_number }}
+              });
+              const labels = pr.data.labels.map(label => label.name).join(',');
+              console.log('PR labels:', labels);
+              return labels;
+            } catch (error) {
+              console.log('Failed to fetch PR labels:', error.message);
+              return '';
+            }
+
+      - name: Calculate new version
+        id: version
+        run: |
+          $currentVersion = Get-Content version.txt
+          $labels = "${{ steps.pr_labels.outputs.result }}"
+
+          echo "Current version: $currentVersion"
+          echo "Labels: $labels"
+
+          # Run version bump script
+          bash .github/scripts/version-bump.sh "$currentVersion" "$labels"
+        shell: pwsh
+
+      - name: Restore dependencies
+        run: dotnet restore src/blackpaw.app/Blackpaw.App.csproj
+        shell: pwsh
+
+      - name: Run tests
+        run: dotnet test tests/Blackpaw.Tests/Blackpaw.Tests.csproj --logger trx
+        shell: pwsh
+
+      - name: Publish self-contained with version
+        run: |
+          $version = "${{ steps.version.outputs.new_version }}"
+          $sha = "${{ github.sha }}".Substring(0, 7)
+
+          dotnet publish src/blackpaw.app/Blackpaw.App.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:PublishTrimmed=false `
+            /p:DebugType=None `
+            /p:Version=$version `
+            /p:AssemblyVersion=$version.0 `
+            /p:FileVersion=$version.0 `
+            /p:InformationalVersion="$version+$sha" `
+            -o artifacts
+        shell: pwsh
+
+      - name: Rename artifact
+        id: artifact
+        run: |
+          $version = "${{ steps.version.outputs.new_version }}"
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $incremented = "${{ steps.version.outputs.version_incremented }}"
+
+          if ($incremented -eq "true") {
+            $newName = "Blackpaw-v$version-win-x64.exe"
+          } else {
+            $newName = "Blackpaw-v$version+$sha-win-x64.exe"
+          }
+
+          Move-Item artifacts/blackpaw.exe "artifacts/$newName"
+          echo "artifact_name=$newName" >> $env:GITHUB_OUTPUT
+          echo "Artifact renamed to: $newName"
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact_name }}
+          path: artifacts/${{ steps.artifact.outputs.artifact_name }}
+
+      - name: Update version.txt
+        if: steps.version.outputs.version_incremented == 'true'
+        run: |
+          $newVersion = "${{ steps.version.outputs.new_version }}"
+          echo $newVersion > version.txt
+        shell: pwsh
+
+      - name: Commit version change
+        if: steps.version.outputs.version_incremented == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.txt
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git push
+        shell: pwsh
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.version_incremented == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          name: Release v${{ steps.version.outputs.new_version }}
+          files: artifacts/${{ steps.artifact.outputs.artifact_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
