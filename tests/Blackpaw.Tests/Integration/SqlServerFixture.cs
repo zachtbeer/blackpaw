@@ -11,12 +11,24 @@ namespace Blackpaw.Tests.Integration;
 public sealed class SqlServerFixture : IAsyncLifetime
 {
     private MsSqlContainer? _container;
+    private string? _initializationError;
+
+    /// <summary>
+    /// Indicates whether the container was successfully initialized.
+    /// Tests should check this before attempting to use the container.
+    /// </summary>
+    public bool IsAvailable => _container != null && _initializationError == null;
+
+    /// <summary>
+    /// Error message if initialization failed, null otherwise.
+    /// </summary>
+    public string? InitializationError => _initializationError;
 
     /// <summary>
     /// The SQL Server container instance.
     /// </summary>
     public MsSqlContainer Container => _container
-        ?? throw new InvalidOperationException("Container not initialized. Ensure InitializeAsync has been called.");
+        ?? throw new InvalidOperationException($"Container not initialized. {_initializationError ?? "Ensure InitializeAsync has been called."}");
 
     /// <summary>
     /// Connection string for the SQL Server container.
@@ -26,6 +38,9 @@ public sealed class SqlServerFixture : IAsyncLifetime
     {
         get
         {
+            if (!IsAvailable)
+                throw new InvalidOperationException($"Container not available: {_initializationError}");
+
             var baseConnStr = Container.GetConnectionString();
             // Ensure TrustServerCertificate is set for container connections
             if (!baseConnStr.Contains("TrustServerCertificate", StringComparison.OrdinalIgnoreCase))
@@ -38,12 +53,19 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _container = new MsSqlBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-            .WithPassword("YourStrong@Passw0rd!")
-            .Build();
+        try
+        {
+            _container = new MsSqlBuilder()
+                .WithPassword("YourStrong@Passw0rd!")
+                .Build();
 
-        await _container.StartAsync();
+            await _container.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            _initializationError = $"Failed to start SQL Server container: {ex.Message}";
+            _container = null;
+        }
     }
 
     public async Task DisposeAsync()
