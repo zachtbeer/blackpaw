@@ -50,8 +50,6 @@ public static class InteractivePrompter
             return InteractiveAction.Exit;
         }
 
-        // Welcome banner
-        AnsiConsole.Write(new FigletText("Blackpaw").Color(Color.Blue));
         AnsiConsole.MarkupLine("[dim]Scenario-based performance capture[/]");
         AnsiConsole.WriteLine();
 

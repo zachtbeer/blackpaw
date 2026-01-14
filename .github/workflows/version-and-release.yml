@@ -4,11 +4,17 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
 
 jobs:
   version-and-release:
-    # Skip if commit message contains [skip ci]
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    # Skip if commit message contains [skip ci] (only for push events)
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: windows-latest
     permissions:
       contents: write
@@ -33,15 +39,43 @@ jobs:
           }
         shell: pwsh
 
+      # Manual trigger - use provided version
+      - name: Use manual version
+        id: manual_version
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          if (!($version -match '^\d+\.\d+\.\d+$')) {
+            echo "::error::Invalid version format. Use semantic versioning (e.g., 1.0.0)"
+            exit 1
+          }
+          echo "new_version=$version" >> $env:GITHUB_OUTPUT
+          echo "version_incremented=true" >> $env:GITHUB_OUTPUT
+          echo "Manual release: $version"
+        shell: pwsh
+
+      # Automatic trigger - detect PR and labels
       - name: Get PR number from merge commit
         id: pr_number
+        if: github.event_name == 'push'
         run: |
           $commitMessage = git log -1 --pretty=%B
+          $prNumber = $null
+
+          # Try standard merge commit format: "Merge pull request #123"
           if ($commitMessage -match "Merge pull request #(\d+)") {
             $prNumber = $matches[1]
+            echo "Detected PR merge commit: #$prNumber"
+          }
+          # Try squash merge format: "Title (#123)"
+          elseif ($commitMessage -match "\(#(\d+)\)") {
+            $prNumber = $matches[1]
+            echo "Detected squash merge: #$prNumber"
+          }
+
+          if ($prNumber) {
             echo "pr_number=$prNumber" >> $env:GITHUB_OUTPUT
             echo "is_pr_merge=true" >> $env:GITHUB_OUTPUT
-            echo "Detected PR merge: #$prNumber"
           } else {
             echo "is_pr_merge=false" >> $env:GITHUB_OUTPUT
             echo "Not a PR merge, treating as direct push"
@@ -50,7 +84,7 @@ jobs:
 
       - name: Get PR labels
         id: pr_labels
-        if: steps.pr_number.outputs.is_pr_merge == 'true'
+        if: github.event_name == 'push' && steps.pr_number.outputs.is_pr_merge == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -69,7 +103,8 @@ jobs:
             }
 
       - name: Calculate new version
-        id: version
+        id: auto_version
+        if: github.event_name == 'push'
         run: |
           $currentVersion = Get-Content version.txt
           $labels = "${{ steps.pr_labels.outputs.result }}"
@@ -79,6 +114,22 @@ jobs:
 
           # Run version bump script
           bash .github/scripts/version-bump.sh "$currentVersion" "$labels"
+        shell: pwsh
+
+      # Combine version outputs
+      - name: Set version
+        id: version
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $newVersion = "${{ steps.manual_version.outputs.new_version }}"
+            $incremented = "${{ steps.manual_version.outputs.version_incremented }}"
+          } else {
+            $newVersion = "${{ steps.auto_version.outputs.new_version }}"
+            $incremented = "${{ steps.auto_version.outputs.version_incremented }}"
+          }
+          echo "new_version=$newVersion" >> $env:GITHUB_OUTPUT
+          echo "version_incremented=$incremented" >> $env:GITHUB_OUTPUT
+          echo "Final version: $newVersion (incremented: $incremented)"
         shell: pwsh
 
       - name: Restore dependencies
