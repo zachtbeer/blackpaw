@@ -7,10 +7,11 @@ public static class ProcessDetector
     /// <summary>
     /// Detects all running .NET Core/.NET 5+ processes by checking for coreclr.dll
     /// </summary>
-    public static List<ProcessInfo> DetectDotNetCoreProcesses()
+    public static List<ProcessInfo> DetectDotNetCoreProcesses(out int accessDeniedCount)
     {
         var result = new List<ProcessInfo>();
         var currentPid = Environment.ProcessId;
+        accessDeniedCount = 0;
 
         foreach (var proc in Process.GetProcesses())
         {
@@ -29,9 +30,14 @@ public static class ProcessDetector
                     }
                 }
             }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Access denied - need admin privileges to inspect this process
+                accessDeniedCount++;
+            }
             catch
             {
-                // Access denied or process exited - skip
+                // Process exited or other error - skip
             }
         }
 
@@ -39,12 +45,21 @@ public static class ProcessDetector
     }
 
     /// <summary>
+    /// Detects all running .NET Core/.NET 5+ processes (without access denied tracking)
+    /// </summary>
+    public static List<ProcessInfo> DetectDotNetCoreProcesses()
+    {
+        return DetectDotNetCoreProcesses(out _);
+    }
+
+    /// <summary>
     /// Detects all running .NET Framework processes by checking for clr.dll (but not coreclr.dll)
     /// </summary>
-    public static List<ProcessInfo> DetectDotNetFrameworkProcesses()
+    public static List<ProcessInfo> DetectDotNetFrameworkProcesses(out int accessDeniedCount)
     {
         var result = new List<ProcessInfo>();
         var currentPid = Environment.ProcessId;
+        accessDeniedCount = 0;
 
         foreach (var proc in Process.GetProcesses())
         {
@@ -68,13 +83,25 @@ public static class ProcessDetector
                     result.Add(new ProcessInfo(proc.Id, proc.ProcessName));
                 }
             }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                accessDeniedCount++;
+            }
             catch
             {
-                // Access denied or process exited - skip
+                // Process exited or other error - skip
             }
         }
 
         return result.DistinctBy(p => p.ProcessName).ToList();
+    }
+
+    /// <summary>
+    /// Detects all running .NET Framework processes (without access denied tracking)
+    /// </summary>
+    public static List<ProcessInfo> DetectDotNetFrameworkProcesses()
+    {
+        return DetectDotNetFrameworkProcesses(out _);
     }
 
     /// <summary>

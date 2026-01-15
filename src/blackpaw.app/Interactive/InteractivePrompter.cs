@@ -8,6 +8,7 @@ namespace Blackpaw.Interactive;
 public enum InteractiveAction
 {
     StartCapture,
+    CompareRuns,
     GenerateReport,
     Exit
 }
@@ -24,6 +25,7 @@ public class InteractiveStartOptions
     public int? WorkloadSize { get; init; }
     public string? WorkloadNotes { get; init; }
     public DeepMonitoringConfig? DeepMonitoring { get; init; }
+    public string? SqlConnectionString { get; init; }
 }
 
 public class InteractiveReportOptions
@@ -57,14 +59,16 @@ public static class InteractivePrompter
             new SelectionPrompt<string>()
                 .Title("[green]What would you like to do?[/]")
                 .AddChoices(
-                    "Start a new performance capture",
-                    "Generate HTML report from existing data",
+                    "Start a new capture",
+                    "Compare two captures",
+                    "Export a capture report",
                     "Exit"));
 
         return choice switch
         {
-            "Start a new performance capture" => InteractiveAction.StartCapture,
-            "Generate HTML report from existing data" => InteractiveAction.GenerateReport,
+            "Start a new capture" => InteractiveAction.StartCapture,
+            "Compare two captures" => InteractiveAction.CompareRuns,
+            "Export a capture report" => InteractiveAction.GenerateReport,
             _ => InteractiveAction.Exit
         };
     }
@@ -181,6 +185,28 @@ public static class InteractivePrompter
         return string.Join("_", name.Split(invalid, StringSplitOptions.RemoveEmptyEntries)).Trim();
     }
 
+    private static string MaskConnectionString(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return "[dim](none)[/]";
+
+        try
+        {
+            var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+            var server = builder.DataSource;
+            if (!string.IsNullOrWhiteSpace(server))
+            {
+                return $"{server} [dim](credentials masked)[/]";
+            }
+        }
+        catch
+        {
+            // Invalid connection string format
+        }
+
+        return "[dim](configured)[/]";
+    }
+
     public static InteractiveStartOptions? PromptForStartOptions()
     {
 
@@ -269,10 +295,11 @@ public static class InteractivePrompter
         // Phase 3: Deep monitoring
         AnsiConsole.WriteLine();
         DeepMonitoringConfig? deepMonitoring = null;
+        string? sqlConnectionString = null;
 
         if (AnsiConsole.Confirm("Configure deep monitoring? (.NET runtime, HTTP, SQL DMV)", defaultValue: false))
         {
-            deepMonitoring = PromptDeepMonitoring();
+            (deepMonitoring, sqlConnectionString) = PromptDeepMonitoring();
         }
 
         // Build options
@@ -287,7 +314,8 @@ public static class InteractivePrompter
             WorkloadType = workloadType,
             WorkloadSize = workloadSize,
             WorkloadNotes = string.IsNullOrWhiteSpace(workloadNotes) ? null : workloadNotes,
-            DeepMonitoring = deepMonitoring
+            DeepMonitoring = deepMonitoring,
+            SqlConnectionString = sqlConnectionString
         };
 
         // Summary
@@ -322,6 +350,7 @@ public static class InteractivePrompter
             if (dmConfig.SqlDmvSampling.Enabled)
             {
                 table.AddRow("SQL DMV sampling", $"every {dmConfig.SqlDmvSampling.SampleIntervalSeconds}s");
+                table.AddRow("SQL connection", MaskConnectionString(options.SqlConnectionString));
             }
         }
 
@@ -337,9 +366,10 @@ public static class InteractivePrompter
         return options;
     }
 
-    private static DeepMonitoringConfig PromptDeepMonitoring()
+    private static (DeepMonitoringConfig config, string? sqlConnectionString) PromptDeepMonitoring()
     {
         var config = new DeepMonitoringConfig();
+        string? sqlConnectionString = null;
 
         AnsiConsole.Write(new Rule("[yellow]Deep Monitoring[/]").RuleStyle("grey"));
 
@@ -355,14 +385,22 @@ public static class InteractivePrompter
             if (appName == "*")
             {
                 // Auto-detect .NET Core processes
-                var coreProcesses = ProcessDetector.DetectDotNetCoreProcesses();
+                var coreProcesses = ProcessDetector.DetectDotNetCoreProcesses(out var accessDenied);
                 if (coreProcesses.Count == 0)
                 {
                     AnsiConsole.MarkupLine("[yellow]No .NET Core processes detected.[/]");
+                    if (accessDenied > 0)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]({accessDenied} processes could not be inspected - run as Administrator to detect more)[/]");
+                    }
                 }
                 else
                 {
                     AnsiConsole.MarkupLine($"[green]Found {coreProcesses.Count} .NET Core process(es):[/]");
+                    if (accessDenied > 0)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]({accessDenied} processes could not be inspected - run as Administrator to detect more)[/]");
+                    }
                     var enableHttpAll = AnsiConsole.Confirm("Enable HTTP monitoring for all?", defaultValue: false);
 
                     foreach (var proc in coreProcesses)
@@ -430,14 +468,22 @@ public static class InteractivePrompter
             if (appName == "*")
             {
                 // Auto-detect .NET Framework processes
-                var fxProcesses = ProcessDetector.DetectDotNetFrameworkProcesses();
+                var fxProcesses = ProcessDetector.DetectDotNetFrameworkProcesses(out var accessDenied);
                 if (fxProcesses.Count == 0)
                 {
                     AnsiConsole.MarkupLine("[yellow]No .NET Framework processes detected.[/]");
+                    if (accessDenied > 0)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]({accessDenied} processes could not be inspected - run as Administrator to detect more)[/]");
+                    }
                 }
                 else
                 {
                     AnsiConsole.MarkupLine($"[green]Found {fxProcesses.Count} .NET Framework process(es):[/]");
+                    if (accessDenied > 0)
+                    {
+                        AnsiConsole.MarkupLine($"[dim]({accessDenied} processes could not be inspected - run as Administrator to detect more)[/]");
+                    }
 
                     foreach (var proc in fxProcesses)
                     {
@@ -484,17 +530,26 @@ public static class InteractivePrompter
         if (AnsiConsole.Confirm("Enable SQL Server DMV sampling?", defaultValue: false))
         {
             config.SqlDmvSampling.Enabled = true;
+
+            sqlConnectionString = AnsiConsole.Prompt(
+                new TextPrompt<string>("[green]SQL Server connection string[/]:")
+                    .PromptStyle("blue")
+                    .Validate(connStr =>
+                    {
+                        if (string.IsNullOrWhiteSpace(connStr))
+                            return ValidationResult.Error("[red]Connection string is required for SQL DMV sampling[/]");
+                        return ValidationResult.Success();
+                    }));
+
             config.SqlDmvSampling.SampleIntervalSeconds = AnsiConsole.Prompt(
                 new TextPrompt<double>("[green]SQL DMV sample interval[/] (seconds):")
                     .DefaultValue(5.0)
                     .Validate(val => val > 0
                         ? ValidationResult.Success()
                         : ValidationResult.Error("[red]Must be greater than 0[/]")));
-
-            AnsiConsole.MarkupLine("[dim]Note: SQL connection string should be set in config.json[/]");
         }
 
-        return config;
+        return (config, sqlConnectionString);
     }
 
 }

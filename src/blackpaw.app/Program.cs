@@ -772,6 +772,7 @@ static async Task<int> RunInteractiveModeAsync()
     return action switch
     {
         InteractiveAction.StartCapture => await RunInteractiveCaptureAsync(),
+        InteractiveAction.CompareRuns => HandleCompare([]),
         InteractiveAction.GenerateReport => RunInteractiveReport(),
         _ => 0
     };
@@ -799,6 +800,12 @@ static async Task<int> RunInteractiveCaptureAsync()
         if (options.DeepMonitoring != null)
         {
             config.DeepMonitoring = options.DeepMonitoring;
+        }
+
+        // Apply SQL connection string if specified
+        if (!string.IsNullOrWhiteSpace(options.SqlConnectionString))
+        {
+            config.SqlConnectionString = options.SqlConnectionString;
         }
 
         var database = new DatabaseService(config.DatabasePath);
@@ -890,6 +897,34 @@ static async Task<int> RunInteractiveCaptureAsync()
         {
             AnsiConsole.MarkupLine($"[yellow]Could not generate report: {ex.Message}[/]");
         }
+
+        // Offer to save config for reuse if no config file was used
+        if (string.IsNullOrEmpty(options.ConfigPath))
+        {
+            AnsiConsole.WriteLine();
+            if (AnsiConsole.Confirm("Save these settings as a config file for future use?", defaultValue: false))
+            {
+                try
+                {
+                    var configDir = Path.GetDirectoryName(Path.GetFullPath(config.DatabasePath)) ?? ".";
+                    var configPath = Path.Combine(configDir, "config.json");
+
+                    // Avoid overwriting existing config
+                    if (File.Exists(configPath))
+                    {
+                        configPath = Path.Combine(configDir, $"config-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+                    }
+
+                    File.WriteAllText(configPath, config.ToJson());
+                    AnsiConsole.MarkupLine($"[green]Config saved:[/] [link]{configPath}[/]");
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Could not save config: {ex.Message}[/]");
+                }
+            }
+        }
+
         return 0;
     }
     catch (OperationCanceledException)
