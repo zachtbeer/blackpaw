@@ -198,6 +198,7 @@ public static class ReportGenerator
     .marker-info { color: var(--success); }
     .marker-warning { color: var(--warning); }
     .marker-error { color: var(--error); }
+    .marker-alert { color: var(--error); font-weight: 600; background: rgba(220, 38, 38, 0.08); }
     h3 {
       color: var(--text);
       margin: 1.5rem 0 0.75rem 0;
@@ -493,12 +494,14 @@ public static class ReportGenerator
         foreach (var m in markers)
         {
             var offset = (m.TimestampUtc - runStart).TotalSeconds;
-            var levelClass = m.Level?.ToLowerInvariant() switch
-            {
-                "warning" => "marker-warning",
-                "error" => "marker-error",
-                _ => "marker-info"
-            };
+            var levelClass = m.MarkerType.Equals("alert", StringComparison.OrdinalIgnoreCase)
+                ? "marker-alert"
+                : m.Level?.ToLowerInvariant() switch
+                {
+                    "warning" => "marker-warning",
+                    "error" => "marker-error",
+                    _ => "marker-info"
+                };
             sb.AppendLine($"          <tr class=\"{levelClass}\"><td>{m.TimestampUtc:HH:mm:ss}</td><td>+{offset:N1}s</td><td>{HtmlEncode(m.MarkerType)}</td><td>{HtmlEncode(m.Label)}</td></tr>");
         }
 
