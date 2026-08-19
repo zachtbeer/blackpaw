@@ -37,6 +37,11 @@
 - **DMV Sampling**: Wait types, I/O stalls, blocking chains, connection counts
 - Configurable sampling intervals
 
+### Threshold Alerts
+- Define simple rules against sampled metrics (system or per-process)
+- Breaches print a live console warning and insert an `alert` marker, with a per-rule cooldown to avoid duplicate noise
+- Alert markers are visually highlighted in HTML reports
+
 ### Data & Reporting
 - All data persisted to SQLite for post-run analysis
 - HTML report generation with charts and statistics
@@ -155,9 +160,34 @@ Create a `config.json` file to configure monitoring behavior:
     },
     "EnableDbCounters": false,
     "DbConnectionString": "Server=localhost;Database=mydb;Integrated Security=true;TrustServerCertificate=true;"
-  }
+  },
+  "Alerts": [
+    {
+      "Metric": "CpuTotalPercent",
+      "Operator": ">",
+      "Threshold": 90,
+      "CooldownSeconds": 60
+    },
+    {
+      "Metric": "WorkingSetMb",
+      "Operator": ">=",
+      "Threshold": 4096,
+      "ProcessName": "myapp",
+      "CooldownSeconds": 60
+    }
+  ]
 }
 ```
+
+**Alert Rules:**
+
+Each entry in `Alerts` is evaluated after every sample during `start`. When a rule breaches, Blackpaw prints a console warning and inserts an `alert` marker (visible in `report`). A rule won't fire again until `CooldownSeconds` has elapsed since it last fired, to avoid flooding markers during a sustained breach.
+
+- `Metric` - the field to watch. System-wide: `CpuTotalPercent`, `MemoryInUseMb`, `MemoryAvailableMb`, `DiskReadBytesPerSec`, `DiskWriteBytesPerSec`. Per-process (requires `ProcessName`): `CpuPercent`, `WorkingSetMb`, `PrivateBytesMb`, `ThreadCount`, `HandleCount`.
+- `Operator` - one of `>`, `>=`, `<`, `<=`, `==`.
+- `Threshold` - the numeric value compared against.
+- `ProcessName` - optional; when set, the rule watches that process's metrics instead of system-wide metrics.
+- `CooldownSeconds` - minimum time between repeated firings of the same rule (default `60`).
 
 **Configuration Properties:**
 - `DatabasePath` - SQLite database file location

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Threshold-based alert markers: configure `Alerts` rules in `config.json` to watch system or per-process metrics during a run; breaches print a console warning and insert an `alert` marker (with cooldown), visually highlighted in HTML reports
 - Open source release preparation
 - SECURITY.md with vulnerability reporting guidelines
 - CONTRIBUTING.md with development workflow

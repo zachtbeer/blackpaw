@@ -31,6 +31,15 @@ public class SqlDmvSamplingConfig
     public double SampleIntervalSeconds { get; set; } = 5;
 }
 
+public class AlertRuleConfig
+{
+    public string Metric { get; set; } = string.Empty;
+    public string Operator { get; set; } = ">";
+    public double Threshold { get; set; }
+    public string? ProcessName { get; set; }
+    public double CooldownSeconds { get; set; } = 60;
+}
+
 public class AppConfig
 {
     /// <summary>
@@ -52,6 +61,7 @@ public class AppConfig
     public bool EnableNetworkMetrics { get; set; }
     public string? SqlConnectionString { get; set; }
     public DeepMonitoringConfig DeepMonitoring { get; set; } = new();
+    public List<AlertRuleConfig> Alerts { get; set; } = new();
 
     public static AppConfig Load(string? configPath)
     {
@@ -96,7 +106,8 @@ public class AppConfig
             SqlConnectionString = overrides.SqlConnectionString ?? baseline.SqlConnectionString,
             EnableDiskMetrics = overrides.EnableDiskMetrics || baseline.EnableDiskMetrics,
             EnableNetworkMetrics = overrides.EnableNetworkMetrics || baseline.EnableNetworkMetrics,
-            DeepMonitoring = MergeDeepMonitoring(baseline.DeepMonitoring, overrides.DeepMonitoring)
+            DeepMonitoring = MergeDeepMonitoring(baseline.DeepMonitoring, overrides.DeepMonitoring),
+            Alerts = overrides.Alerts.Count == 0 ? baseline.Alerts : overrides.Alerts
         };
 
         return merged;

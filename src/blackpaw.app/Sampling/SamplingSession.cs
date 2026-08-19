@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Hardware.Info;
+using Blackpaw.Alerting;
 using Blackpaw.Configuration;
 using Blackpaw.Data;
 using Blackpaw.Diagnostics;
@@ -11,6 +12,7 @@ public class SamplingSession : IDisposable
 {
     private readonly DatabaseService _database;
     private readonly AppConfig _config;
+    private readonly AlertEvaluator _alertEvaluator;
     private readonly ProcessCpuTracker _processCpuTracker = new();
     private readonly HardwareInfo _hardwareInfo = new();
     private readonly PerformanceCounter? _cpuTotalCounter;
@@ -26,6 +28,7 @@ public class SamplingSession : IDisposable
     {
         _database = database;
         _config = config;
+        _alertEvaluator = new AlertEvaluator(config.Alerts);
 
         if (!OperatingSystem.IsWindows())
         {
@@ -115,6 +118,11 @@ public class SamplingSession : IDisposable
                 _database.InsertProcessSamples(processSamples);
             }
 
+            if (_alertEvaluator.HasRules)
+            {
+                EvaluateAlerts(runId, systemSample, processSamples, timestamp);
+            }
+
             foreach (var process in activeProcesses)
             {
                 process.Dispose();
@@ -123,6 +131,32 @@ public class SamplingSession : IDisposable
 
         deepStartMonitor.Dispose();
         dmvSampler?.Dispose();
+    }
+
+    private void EvaluateAlerts(long runId, SystemSample systemSample, List<ProcessSample> processSamples, DateTime timestampUtc)
+    {
+        var events = _alertEvaluator.Evaluate(systemSample, processSamples, timestampUtc);
+        foreach (var alertEvent in events)
+        {
+            var label = alertEvent.Describe();
+            Console.WriteLine($"[ALERT] {label}");
+
+            try
+            {
+                _database.InsertMarker(new Marker
+                {
+                    RunId = runId,
+                    TimestampUtc = timestampUtc,
+                    MarkerType = "alert",
+                    Level = "warning",
+                    Label = label
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug($"Failed to insert alert marker: {ex.Message}");
+            }
+        }
     }
 
     private SystemSample CollectSystemSample(long runId, DateTime timestampUtc)
